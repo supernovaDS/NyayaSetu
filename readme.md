@@ -255,13 +255,4 @@ npm run lint
 npm run build
 ```
 
-## Current Limitations
 
-- Deadline rules are demo defaults and should not be treated as legal advice.
-- Authentication and role-based access control are not implemented yet.
-- Source highlighting depends on selectable text; scanned PDFs may fall back to page-level evidence.
-- SQLite is suitable for the hackathon demo, but production should use PostgreSQL/Supabase or another managed database.
-
-## Why This Is Hackathon-Relevant
-
-NyayaSetu directly matches the problem statement: it reads judgment PDFs, extracts key information, generates action plans, requires human verification, and displays only approved records in a dashboard. The differentiator is trust: every important output is editable, source-backed, scored, audited, and exportable.
