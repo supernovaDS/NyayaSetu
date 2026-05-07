@@ -49,6 +49,43 @@ function StatTile({ label, value, detail, tone = 'neutral' }) {
   );
 }
 
+function RiskDonut({ cases }) {
+  const counts = { critical: 0, high: 0, medium: 0, low: 0 };
+  cases.forEach((c) => { const r = c.action_plan?.contempt_risk_level || 'low'; if (counts[r] !== undefined) counts[r]++; });
+  const total = cases.length || 1;
+  const colors = { critical: '#c01048', high: '#c4320a', medium: '#b54708', low: '#057a55' };
+  const radius = 40; const circ = 2 * Math.PI * radius;
+  let offset = 0;
+  const segments = Object.entries(counts).filter(([, v]) => v > 0).map(([level, count]) => {
+    const pct = count / total;
+    const seg = { level, dash: circ * pct, offset, color: colors[level] };
+    offset += circ * pct;
+    return seg;
+  });
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+      <svg width="96" height="96" viewBox="0 0 100 100">
+        {segments.map((s) => (
+          <circle key={s.level} cx="50" cy="50" r={radius} fill="none" stroke={s.color} strokeWidth="14"
+            strokeDasharray={`${s.dash} ${circ - s.dash}`} strokeDashoffset={-s.offset}
+            style={{ transition: 'all 0.6s ease' }} transform="rotate(-90 50 50)" />
+        ))}
+        <text x="50" y="54" textAnchor="middle" fontSize="18" fontWeight="900" fill="var(--ink)">{total}</text>
+      </svg>
+      <div style={{ display: 'grid', gap: 4 }}>
+        {Object.entries(counts).map(([level, count]) => (
+          <div key={level} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 3, background: colors[level], display: 'inline-block' }} />
+            <span style={{ fontWeight: 700, textTransform: 'capitalize' }}>{level}</span>
+            <span style={{ color: 'var(--muted)' }}>{count}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
 function AuditTrail({ jobId }) {
   const [events, setEvents] = useState(null);
   const [open, setOpen] = useState(false);
@@ -244,6 +281,7 @@ export default function DashboardPage({ onUpload, onAdmin }) {
             </p>
             <p className="panel-copy">Average readiness {averageReadiness}/100 | Estimated review time saved {minutesSaved} minutes</p>
           </div>
+          <RiskDonut cases={cases} />
           <div className="filter-row">
             {RISK_FILTERS.map((filter) => (
               <button

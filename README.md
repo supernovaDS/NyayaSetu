@@ -1,122 +1,25 @@
 # NyayaSetu
 
-NyayaSetu is an AI-assisted court judgment processing system for government departments. It converts long, unstructured judgment PDFs into verified action plans, source-backed evidence, deadline risk views, draft file notes, precedent hints, and a compliance dashboard.
+NyayaSetu converts court judgment PDFs into evidence-backed, human-verified government action plans. It is built for departments that receive disposed case judgments and need to quickly identify directives, deadlines, responsible offices, compliance risk, and next actions.
 
-The core idea is simple: AI can help read and structure a judgment, but only human-verified records should move into government decision workflows.
+The application is not a generic PDF summarizer. It is a workflow system: AI assists extraction, deterministic services calculate risk and handoff details, and only human-approved records enter the trusted dashboard.
 
-## What Problem It Solves
+## Highlights
 
-Government departments often receive court orders and final judgments as PDFs. These documents can be long, scanned, inconsistent, and legally dense. Officials must manually identify:
-
-- case details
-- date of order
-- parties and government role
-- final directions
-- compliance requirements
-- appeal or review urgency
-- responsible department
-- important deadlines
-
-Manual reading can delay compliance and increase the risk of missed deadlines or contempt proceedings. NyayaSetu reduces that risk by turning judgments into a verified, trackable workflow.
-
-## What The Application Does
-
-NyayaSetu provides an end-to-end workflow:
-
-1. Upload a court judgment PDF.
-2. AI identifies the most important pages instead of processing every page heavily.
-3. AI extracts structured legal data and an action plan.
-4. The backend calculates deadline and risk metadata.
-5. The system attaches source quotes and PDF-page evidence.
-6. A human reviewer edits and approves the extracted data.
-7. Only approved records appear in the dashboard.
-8. Decision makers track the case through a Kanban compliance workflow.
-9. The system exports a compliance packet containing verified data, source evidence, draft file note, review flags, and audit trail.
-
-## Key Features
-
-### Two-Pass Judgment Extraction
-
-NyayaSetu uses a two-pass extraction pipeline:
-
-- Pass 1: PyMuPDF extracts text from all pages. Gemini identifies pages likely to contain metadata, final orders, directions, and timelines.
-- Pass 2: only those critical pages are rendered as images and sent to Gemini vision for structured extraction.
-
-This keeps the demo fast and makes long PDFs easier to handle.
-
-### Human Verification
-
-The review screen is intentionally not a blind AI output screen. The reviewer can edit:
-
-- case title
-- case number
-- order date
-- state role
-- parties
-- directives
-- timelines
-- action type
-- deadline
-- responsible office
-- reasoning
-- file note
-
-The approved version, not the raw AI version, is stored.
-
-### Source Evidence Viewer
-
-Each important field is paired with source evidence:
-
-- source page
-- source quote
-- confidence
-- bounding-box highlight when the quote can be located by PyMuPDF
-
-The review UI renders the PDF page and highlights the supporting area when available.
-
-### Decision Readiness Score
-
-NyayaSetu computes a readiness score for every extracted judgment. It flags missing fields, low confidence, missing evidence, missing deadlines, and urgent deadlines. This gives judges and reviewers an immediate trust signal.
-
-### Deadline Assist
-
-The system applies deterministic demo rules:
-
-- appeal: 30 days
-- review: 90 days
-- compliance: 60 days
-
-The reviewer can recalculate the deadline with override days and record an override reason.
-
-### Department Routing
-
-The backend suggests a responsible department using deterministic keyword rules. Example categories include service matters, land acquisition, pension, environment, education, public works, and home/police.
-
-### Precedent Intelligence
-
-NyayaSetu searches a curated local precedent set using Gemini embeddings and cosine similarity. It shows similar cases, similarity score, previous outcome, and action taken.
-
-### Persistent Dashboard
-
-Approved records are stored in SQLite and shown in a Kanban board:
-
-- Pending Verification
-- Drafting Note
-- Awaiting Approval
-- Compliance Done
-
-The dashboard includes risk filters, readiness metadata, audit trail, packet export, and printable packet view.
+- Upload scanned or digital judgment PDFs.
+- Two-pass pipeline finds critical pages before vision extraction.
+- Extracts case title, case number, order date, parties, directives, timelines, and confidence.
+- Generates action plan: compliance, appeal, or review.
+- Calculates deadline and contempt risk using deterministic rules.
+- Routes the case to a likely responsible department.
+- Shows source evidence with page, quote, confidence, and optional PDF highlight.
+- Requires human review and approval before dashboard entry.
+- Adds operational intelligence: priority summary, service lane, escalation note, first-48-hour checklist, stakeholders, and handoff tasks.
+- Tracks approved cases on a verified dashboard with risk filters, next deadlines, department load, audit trail, and packet export.
 
 ## Tech Stack
 
-### Frontend
-
-- React
-- Vite
-- Tailwind CSS
-- Custom CSS design system
-
-### Backend
+Backend:
 
 - FastAPI
 - Pydantic
@@ -124,15 +27,17 @@ The dashboard includes risk filters, readiness metadata, audit trail, packet exp
 - PyMuPDF
 - Google Gemini API
 
-### AI
+Frontend:
 
-- Gemini model for page finding and multimodal extraction
-- Gemini `text-embedding-004` for precedent search embeddings
+- React
+- Vite
+- Tailwind CSS
+- custom CSS
 
-### Storage
+AI:
 
-- Uploaded PDFs: `backend/uploads/`
-- Approved cases and audit events: `backend/nyayasetu.db`
+- Gemini model for critical page selection and multimodal extraction
+- Gemini `text-embedding-004` for curated precedent search
 
 ## Project Structure
 
@@ -153,6 +58,7 @@ NyayaSetu/
       deadline_service.py
       department_service.py
       extraction_service.py
+      intelligence_service.py
       llm_service.py
       pdf_service.py
       precedent_service.py
@@ -164,7 +70,6 @@ NyayaSetu/
   frontend/
     src/
       App.jsx
-      main.jsx
       index.css
       pages/
         AdminPage.jsx
@@ -172,22 +77,16 @@ NyayaSetu/
         ReviewPage.jsx
         UploadPage.jsx
     package.json
-  problem_statement.md
+  description.md
+  developer.md
+  demo.md
   features.md
   implementation.md
-  working.md
-  developer_plan.md
-  demo.md
-  future_roadmap.md
+  ppt.md
+  problem_statement.md
 ```
 
 ## Setup
-
-### Prerequisites
-
-- Python 3.10+
-- Node.js 18+
-- Google Gemini API key
 
 ### Backend
 
@@ -202,7 +101,7 @@ Create `backend/.env`:
 GEMINI_API_KEY=your_api_key_here
 ```
 
-Run the backend:
+Run:
 
 ```bash
 python -m uvicorn main:app --reload --port 8000
@@ -210,7 +109,7 @@ python -m uvicorn main:app --reload --port 8000
 
 Health check:
 
-```bash
+```text
 http://127.0.0.1:8000/health
 ```
 
@@ -228,25 +127,18 @@ Open:
 http://127.0.0.1:5173
 ```
 
-## How To Use
+## Usage
 
-1. Open the app at `http://127.0.0.1:5173`.
-2. Upload a court judgment PDF from the upload page.
-3. Wait while the two-pass extraction pipeline runs.
-4. On the review page, inspect the PDF evidence on the left.
-5. Click source evidence cards to jump to the relevant PDF page and highlight.
-6. Edit extracted case data if required.
-7. Review the action plan, deadline rule, department routing, and risk level.
-8. Check the decision readiness score and review flags.
-9. Edit the file note draft.
-10. Enter reviewer name and role.
-11. Approve the verified record.
-12. Open the dashboard.
-13. Filter cases by urgency, criticality, readiness, or missing deadline.
-14. Move cases through workflow columns.
-15. Open the audit trail or export the compliance packet.
+1. Open the upload screen.
+2. Upload a court judgment PDF.
+3. Wait for critical page detection and extraction.
+4. Review extracted fields beside PDF evidence.
+5. Edit directives, deadlines, action type, responsible office, and file note if needed.
+6. Check readiness score, evidence coverage, impact brief, service lane, and first-48-hour handoff.
+7. Approve as a reviewer.
+8. Use the dashboard to track risk, department load, next deadlines, audit trail, and compliance packet.
 
-## Verification Commands
+## Verification
 
 ```bash
 python -m compileall backend
@@ -255,4 +147,8 @@ npm run lint
 npm run build
 ```
 
+## Demo Guide
 
+Read `demo.md` for a full hackathon demo script and PDF selection strategy.
+
+Read `developer.md` for a complete technical explanation, architecture, features, judge Q&A preparation, and implementation notes.

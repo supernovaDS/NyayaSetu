@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse, PlainTextResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from html import escape
 from services.storage_service import (
     get_audit_events,
     get_case,
@@ -18,11 +19,11 @@ class ApproveRequest(BaseModel):
     job_id: str
     extracted_data: dict
     action_plan: dict
-    source_evidence: dict = {}
-    review_meta: dict = {}
+    source_evidence: dict = Field(default_factory=dict)
+    review_meta: dict = Field(default_factory=dict)
     verified_by: str = "Demo Reviewer"
     verified_role: str = "legal_reviewer"
-    edits: dict = {}
+    edits: dict = Field(default_factory=dict)
 
 
 class StatusUpdate(BaseModel):
@@ -89,9 +90,16 @@ async def get_compliance_packet(job_id: str):
         f"Verified by: {case.get('verified_by', '')}",
         f"Reviewer role: {case.get('verified_role', '')}",
         f"Case category: {review_meta.get('case_category', '')}",
+        f"Triage lane: {review_meta.get('triage_lane', '')}",
         f"Decision readiness score: {review_meta.get('readiness_score', '')}/100",
+        f"Source coverage: {review_meta.get('source_coverage', '')}%",
+        f"Confidence label: {review_meta.get('confidence_label', '')}",
         f"Estimated minutes saved: {review_meta.get('estimated_minutes_saved', '')}",
         f"Approved at: {case.get('approved_at', '')}",
+        "",
+        "IMPACT BRIEF",
+        "-" * 12,
+        review_meta.get("impact_summary", ""),
         "",
         "ACTION PLAN",
         "-" * 11,
@@ -100,6 +108,9 @@ async def get_compliance_packet(job_id: str):
         f"Deadline: {plan.get('calculated_deadline', '')}",
         f"Days remaining: {plan.get('days_remaining', '')}",
         f"Risk level: {plan.get('contempt_risk_level', '')}",
+        f"Service level: {plan.get('service_level', '')}",
+        f"Priority summary: {plan.get('priority_summary', '')}",
+        f"Escalation note: {plan.get('escalation_note', '')}",
         "",
         "DIRECTIVES",
         "-" * 10,
@@ -108,6 +119,19 @@ async def get_compliance_packet(job_id: str):
         lines.append(f"{idx}. {directive}")
 
     lines.extend(["", "DRAFT FILE NOTE", "-" * 15, plan.get("draft_file_note", "")])
+
+    lines.extend(["", "FIRST 48 HOURS", "-" * 14])
+    for idx, task in enumerate(plan.get("first_48_hours", []), start=1):
+        lines.append(f"{idx}. {task}")
+
+    lines.extend(["", "STAKEHOLDER HANDOFF", "-" * 19])
+    for item in plan.get("stakeholders", []):
+        lines.append(f"{item.get('designation', '')}: {item.get('responsibility', '')}")
+        lines.append(f"  Handoff: {item.get('handoff', '')}")
+
+    lines.extend(["", "CHECKLIST", "-" * 9])
+    for item in plan.get("handoff_checklist", []):
+        lines.append(f"- {item.get('title', '')} | {item.get('owner', '')} | Due {item.get('due', '')} | {item.get('status', '')}")
 
     lines.extend(["", "SOURCE EVIDENCE", "-" * 15])
     for key, item in evidence.items():
@@ -146,7 +170,21 @@ async def get_compliance_packet_html(job_id: str):
     review_meta = case.get("review_meta", {})
     events = get_audit_events(job_id)
 
-    directives = "".join(f"<li>{directive}</li>" for directive in data.get("directives", []))
+    directives = "".join(f"<li>{escape(str(directive))}</li>" for directive in data.get("directives", []))
+    first_48 = "".join(f"<li>{escape(str(task))}</li>" for task in plan.get("first_48_hours", []))
+    stakeholders = "".join(
+        f"<tr><td>{escape(str(item.get('designation', '')))}</td>"
+        f"<td>{escape(str(item.get('responsibility', '')))}</td>"
+        f"<td>{escape(str(item.get('handoff', '')))}</td></tr>"
+        for item in plan.get("stakeholders", [])
+    )
+    checklist = "".join(
+        f"<tr><td>{escape(str(item.get('title', '')))}</td>"
+        f"<td>{escape(str(item.get('owner', '')))}</td>"
+        f"<td>{escape(str(item.get('due', '')))}</td>"
+        f"<td>{escape(str(item.get('status', '')))}</td></tr>"
+        for item in plan.get("handoff_checklist", [])
+    )
     evidence_rows = ""
     for key, item in evidence.items():
         try:
@@ -154,15 +192,15 @@ async def get_compliance_packet_html(job_id: str):
         except (TypeError, ValueError):
             confidence = 0.0
         evidence_rows += (
-            f"<tr><td>{key}</td><td>{item.get('page', '-')}</td>"
-            f"<td>{confidence:.0%}</td><td>{item.get('quote', '')}</td></tr>"
+            f"<tr><td>{escape(str(key))}</td><td>{escape(str(item.get('page', '-')))}</td>"
+            f"<td>{confidence:.0%}</td><td>{escape(str(item.get('quote', '')))}</td></tr>"
         )
     audit_rows = "".join(
-        f"<tr><td>{event['created_at']}</td><td>{event['actor']}</td><td>{event['event_type']}</td><td>{event['details']}</td></tr>"
+        f"<tr><td>{escape(str(event['created_at']))}</td><td>{escape(str(event['actor']))}</td><td>{escape(str(event['event_type']))}</td><td>{escape(str(event['details']))}</td></tr>"
         for event in events
     )
     flag_rows = "".join(
-        f"<tr><td>{flag.get('severity', 'info')}</td><td>{flag.get('title', '')}</td><td>{flag.get('detail', '')}</td></tr>"
+        f"<tr><td>{escape(str(flag.get('severity', 'info')))}</td><td>{escape(str(flag.get('title', '')))}</td><td>{escape(str(flag.get('detail', '')))}</td></tr>"
         for flag in review_meta.get("flags", [])
     )
 
@@ -192,30 +230,46 @@ async def get_compliance_packet_html(job_id: str):
 
       <h2>Case</h2>
       <div class="grid">
-        <strong>Case title</strong><span>{data.get('case_title', '')}</span>
-        <strong>Case number</strong><span>{data.get('case_number', '')}</span>
-        <strong>Date of order</strong><span>{data.get('date_of_order', '')}</span>
-        <strong>State role</strong><span>{data.get('state_role', '')}</span>
-        <strong>Verified by</strong><span>{case.get('verified_by', '')} ({case.get('verified_role', '')})</span>
-        <strong>Case category</strong><span>{review_meta.get('case_category', '')}</span>
-        <strong>Readiness score</strong><span>{review_meta.get('readiness_score', '')}/100</span>
-        <strong>Estimated time saved</strong><span>{review_meta.get('estimated_minutes_saved', '')} minutes</span>
+        <strong>Case title</strong><span>{escape(str(data.get('case_title', '')))}</span>
+        <strong>Case number</strong><span>{escape(str(data.get('case_number', '')))}</span>
+        <strong>Date of order</strong><span>{escape(str(data.get('date_of_order', '')))}</span>
+        <strong>State role</strong><span>{escape(str(data.get('state_role', '')))}</span>
+        <strong>Verified by</strong><span>{escape(str(case.get('verified_by', '')))} ({escape(str(case.get('verified_role', '')))})</span>
+        <strong>Case category</strong><span>{escape(str(review_meta.get('case_category', '')))}</span>
+        <strong>Triage lane</strong><span>{escape(str(review_meta.get('triage_lane', '')))}</span>
+        <strong>Readiness score</strong><span>{escape(str(review_meta.get('readiness_score', '')))}/100</span>
+        <strong>Source coverage</strong><span>{escape(str(review_meta.get('source_coverage', '')))}%</span>
+        <strong>Estimated time saved</strong><span>{escape(str(review_meta.get('estimated_minutes_saved', '')))} minutes</span>
       </div>
+
+      <h2>Impact Brief</h2>
+      <div class="note">{escape(str(review_meta.get('impact_summary', '')))}</div>
 
       <h2>Action Plan</h2>
       <div class="grid">
-        <strong>Action type</strong><span>{plan.get('action_type', '')}</span>
-        <strong>Responsible office</strong><span>{plan.get('assigned_designation', '')}</span>
-        <strong>Deadline</strong><span>{plan.get('calculated_deadline', '')}</span>
-        <strong>Rule applied</strong><span>{plan.get('deadline_rule_id', '')}</span>
-        <strong>Risk level</strong><span>{plan.get('contempt_risk_level', '')}</span>
+        <strong>Action type</strong><span>{escape(str(plan.get('action_type', '')))}</span>
+        <strong>Responsible office</strong><span>{escape(str(plan.get('assigned_designation', '')))}</span>
+        <strong>Deadline</strong><span>{escape(str(plan.get('calculated_deadline', '')))}</span>
+        <strong>Rule applied</strong><span>{escape(str(plan.get('deadline_rule_id', '')))}</span>
+        <strong>Risk level</strong><span>{escape(str(plan.get('contempt_risk_level', '')))}</span>
+        <strong>Service level</strong><span>{escape(str(plan.get('service_level', '')))}</span>
+        <strong>Priority summary</strong><span>{escape(str(plan.get('priority_summary', '')))}</span>
       </div>
 
       <h2>Directives</h2>
       <ol>{directives}</ol>
 
       <h2>Draft File Note</h2>
-      <div class="note">{plan.get('draft_file_note', '')}</div>
+      <div class="note">{escape(str(plan.get('draft_file_note', '')))}</div>
+
+      <h2>First 48 Hours</h2>
+      <ol>{first_48}</ol>
+
+      <h2>Stakeholder Handoff</h2>
+      <table><thead><tr><th>Designation</th><th>Responsibility</th><th>Handoff</th></tr></thead><tbody>{stakeholders}</tbody></table>
+
+      <h2>Checklist</h2>
+      <table><thead><tr><th>Task</th><th>Owner</th><th>Due</th><th>Status</th></tr></thead><tbody>{checklist}</tbody></table>
 
       <h2>Source Evidence</h2>
       <table><thead><tr><th>Field</th><th>Page</th><th>Confidence</th><th>Quote</th></tr></thead><tbody>{evidence_rows}</tbody></table>

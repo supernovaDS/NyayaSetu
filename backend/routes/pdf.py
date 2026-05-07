@@ -1,7 +1,7 @@
 import os
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
-from services.pdf_service import render_page_as_png
+from services.pdf_service import get_page_count, render_page_as_png
 
 router = APIRouter()
 
@@ -16,3 +16,11 @@ async def get_pdf_page(job_id: str, page_number: int):
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Could not render page: {exc}") from exc
     return Response(content=image, media_type="image/png")
+
+
+@router.get("/pdf/{job_id}/info")
+async def get_pdf_info(job_id: str):
+    pdf_path = os.path.join("uploads", f"{job_id}.pdf")
+    if not os.path.exists(pdf_path):
+        raise HTTPException(status_code=404, detail="PDF not found")
+    return {"page_count": get_page_count(pdf_path)}

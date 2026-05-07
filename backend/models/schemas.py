@@ -47,6 +47,19 @@ class ReviewFlag(BaseModel):
     detail: str = ""
 
 
+class StakeholderStep(BaseModel):
+    designation: str = ""
+    responsibility: str = ""
+    handoff: str = ""
+
+
+class HandoffTask(BaseModel):
+    title: str = ""
+    owner: str = ""
+    due: str = ""
+    status: str = "pending"
+
+
 class ReviewMeta(BaseModel):
     case_category: str = "General"
     readiness_score: int = Field(0, ge=0, le=100)
@@ -54,6 +67,10 @@ class ReviewMeta(BaseModel):
     estimated_minutes_saved: int = 0
     pages_reduced: int = 0
     critical_pages_count: int = 0
+    impact_summary: str = ""
+    triage_lane: str = "standard"
+    source_coverage: int = Field(0, ge=0, le=100)
+    confidence_label: str = "unverified"
 
 
 class ActionPlan(BaseModel):
@@ -67,6 +84,12 @@ class ActionPlan(BaseModel):
     deadline_rule_id: str = ""
     deadline_basis: str = ""
     deadline_override_reason: str = ""
+    priority_summary: str = ""
+    service_level: str = "standard"
+    escalation_note: str = ""
+    first_48_hours: list[str] = Field(default_factory=list)
+    stakeholders: list[StakeholderStep] = Field(default_factory=list)
+    handoff_checklist: list[HandoffTask] = Field(default_factory=list)
 
 
 class ExtractionResult(BaseModel):

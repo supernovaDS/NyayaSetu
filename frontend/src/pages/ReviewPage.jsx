@@ -26,6 +26,7 @@ function PdfEvidenceViewer({ jobId, selectedEvidence }) {
   const bbox = selectedEvidence?.bbox || [];
   const hasBox = bbox.length === 4;
   const [pageCount, setPageCount] = useState(1);
+  const [zoom, setZoom] = useState(100);
   const pageRefs = useRef({});
 
   useEffect(() => {
@@ -60,21 +61,28 @@ function PdfEvidenceViewer({ jobId, selectedEvidence }) {
       <div className="flex h-14 items-center justify-between border-b border-[var(--border)] bg-white px-4">
         <div>
           <p className="text-sm font-semibold">Full Judgment</p>
-          <p className="text-xs text-[var(--text-muted)]">Showing page {page} of {pageCount}; click evidence to jump and highlight.</p>
+          <p className="text-xs text-[var(--text-muted)]">Page {page} of {pageCount} · click evidence to jump</p>
         </div>
-        {selectedEvidence?.confidence !== undefined && (
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-[var(--text-secondary)]">
-            {Math.round((selectedEvidence.confidence || 0) * 100)}% evidence
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {selectedEvidence?.confidence !== undefined && (
+            <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
+              {Math.round((selectedEvidence.confidence || 0) * 100)}% confidence
+            </span>
+          )}
+          <div className="zoom-toolbar">
+            <button onClick={() => setZoom((z) => Math.max(50, z - 25))}>−</button>
+            <span>{zoom}%</span>
+            <button onClick={() => setZoom((z) => Math.min(200, z + 25))}>+</button>
+          </div>
+        </div>
       </div>
       <div className="flex-1 overflow-auto p-5">
-        <div className="mx-auto grid w-full max-w-[860px] gap-5">
+        <div className="mx-auto grid w-full gap-5" style={{ maxWidth: `${860 * zoom / 100}px` }}>
           {pages.map((pageNumber) => (
             <div
               key={pageNumber}
               ref={(node) => { if (node) pageRefs.current[pageNumber] = node; }}
-              className="pdf-page-shell"
+              className={`pdf-page-shell${pageNumber === page ? ' active-page' : ''}`}
             >
               <div className="pdf-page-label">Page {pageNumber}</div>
               <div className="relative shadow-sm">
@@ -86,7 +94,7 @@ function PdfEvidenceViewer({ jobId, selectedEvidence }) {
                 />
                 {hasBox && pageNumber === page && (
                   <div
-                    className="absolute rounded-sm border-2 border-blue-600 bg-blue-500/20 ring-4 ring-blue-500/10"
+                    className="evidence-highlight"
                     style={{
                       left: `${bbox[0] * 100}%`,
                       top: `${bbox[1] * 100}%`,
@@ -493,7 +501,21 @@ export default function ReviewPage({ result, onBack, onApproved }) {
           </div>
 
           <footer className="shrink-0 border-t border-[var(--border)] bg-white p-4">
-            <div className="grid grid-cols-[1fr_190px_auto_auto] items-end gap-3">
+            {Object.keys(edits).length > 0 && (
+              <details className="diff-panel">
+                <summary>{Object.keys(edits).length} field{Object.keys(edits).length > 1 ? 's' : ''} edited</summary>
+                <div style={{ marginTop: 10 }}>
+                  {Object.entries(edits).map(([key, val]) => (
+                    <div key={key} className="diff-row">
+                      <span className="diff-field">{key.split('.').pop()}</span>
+                      <span className="diff-before">{typeof val.before === 'object' ? JSON.stringify(val.before) : String(val.before).slice(0, 80)}</span>
+                      <span className="diff-after">{typeof val.after === 'object' ? JSON.stringify(val.after) : String(val.after).slice(0, 80)}</span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+            <div className="grid grid-cols-[1fr_190px_auto_auto] items-end gap-3" style={{ marginTop: Object.keys(edits).length > 0 ? 12 : 0 }}>
               <TextInput label="Reviewer" value={verifiedBy} onChange={setVerifiedBy} />
               <SelectInput label="Role" value={verifiedRole} onChange={setVerifiedRole}>
                 {ROLES.map((role) => <option key={role.id} value={role.id}>{role.label}</option>)}

@@ -28,6 +28,8 @@ Return a JSON object with exactly two top-level keys: "extracted_data" and "acti
 - reasoning (string): Why this action is recommended
 - contempt_risk_level (string): One of "critical", "high", "medium", "low"
 - draft_file_note (string): A formal government file note. Start with "Reference is made to the judgment dated..."
+- priority_summary (string): One-sentence operational summary for senior officers, if clear from the document
+- first_48_hours (array of strings): Immediate practical steps, if clear from the document
 
 Also include a third top-level key named "source_evidence".
 "source_evidence" must be an object where each important field maps to:

@@ -5,6 +5,7 @@ from services.llm_service import find_critical_pages
 from services.vision_service import extract_from_images
 from services.department_service import route_department
 from services.quality_service import build_review_meta
+from services.intelligence_service import enrich_action_plan
 from models.schemas import ExtractionResult, ExtractedData, ActionPlan, SourceEvidence
 
 
@@ -41,12 +42,12 @@ def _with_bbox(pdf_path: str, key: str, evidence: SourceEvidence, extracted: Ext
         return evidence
 
     candidates_by_key = {
-        "case_title": [extracted.case_title, evidence.quote],
-        "case_number": [extracted.case_number, evidence.quote],
-        "date_of_order": [extracted.date_of_order, evidence.quote],
-        "directives": [*(extracted.directives or []), evidence.quote],
-        "timelines": [*(extracted.timelines or []), evidence.quote],
-        "action_plan": [action.reasoning, action.draft_file_note, evidence.quote],
+        "case_title": [evidence.quote, extracted.case_title],
+        "case_number": [evidence.quote, extracted.case_number],
+        "date_of_order": [evidence.quote, extracted.date_of_order],
+        "directives": [evidence.quote, *(extracted.directives or [])],
+        "timelines": [evidence.quote, *(extracted.timelines or [])],
+        "action_plan": [evidence.quote, action.reasoning],
     }
     evidence.bbox = find_text_bbox(pdf_path, evidence.page, candidates_by_key.get(key, [evidence.quote]))
     return evidence
@@ -131,6 +132,7 @@ async def process_judgment(pdf_path: str) -> ExtractionResult:
     action.contempt_risk_level = deadline_info["contempt_risk_level"]
     action.deadline_rule_id = deadline_info["deadline_rule_id"]
     action.deadline_basis = deadline_info["deadline_basis"]
+    action = enrich_action_plan(extracted, action)
 
     # Page references (simplified: first critical page = metadata, last = directives)
     page_refs = {}
