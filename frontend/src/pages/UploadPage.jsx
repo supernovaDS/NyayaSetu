@@ -81,14 +81,29 @@ export default function UploadPage({ onResult, onDashboard, onAdmin }) {
       <main className="container upload-main">
         <section>
           <p className="eyebrow">Verified court compliance</p>
-          <h1 className="hero-title">Court judgments, converted into verified action plans.</h1>
+          <h1 className="hero-title">Judgment intake for real government action.</h1>
           <p className="hero-copy">
-            Extract directives, calculate deadlines, route departments, verify evidence, and move approved cases into a focused compliance dashboard.
+            Upload a disposed case judgment and get an evidence-backed review desk: critical pages, directives, deadline math, department routing, escalation lane, and a printable compliance packet.
           </p>
           <div className="feature-row">
             <span className="feature-pill">Source evidence</span>
             <span className="feature-pill">Human approval</span>
+            <span className="feature-pill">48-hour handoff</span>
             <span className="feature-pill">Audit trail</span>
+          </div>
+          <div className="intake-proof">
+            <div>
+              <p className="proof-value">2-pass</p>
+              <p className="proof-label">critical page extraction</p>
+            </div>
+            <div>
+              <p className="proof-value">100%</p>
+              <p className="proof-label">human verified before dashboard</p>
+            </div>
+            <div>
+              <p className="proof-value">1 packet</p>
+              <p className="proof-label">ready for file movement</p>
+            </div>
           </div>
         </section>
 
@@ -117,7 +132,7 @@ export default function UploadPage({ onResult, onDashboard, onAdmin }) {
               <div className="step-list">
                 {STEPS.map((label, i) => (
                   <div key={label} className={`step-item ${i < step ? 'done' : ''} ${i === step ? 'active' : ''}`}>
-                    <span className="step-dot">{i < step ? '✓' : i + 1}</span>
+                    <span className="step-dot">{i < step ? 'ok' : i + 1}</span>
                     <span>{label}</span>
                   </div>
                 ))}

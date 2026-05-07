@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 const ROLES = [
   { id: 'legal_reviewer', label: 'Legal Reviewer' },
@@ -25,13 +25,42 @@ function PdfEvidenceViewer({ jobId, selectedEvidence }) {
   const page = selectedEvidence?.page || 1;
   const bbox = selectedEvidence?.bbox || [];
   const hasBox = bbox.length === 4;
+  const [pageCount, setPageCount] = useState(1);
+  const pageRefs = useRef({});
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadPdfInfo() {
+      try {
+        const response = await fetch(`/api/pdf/${jobId}/info`);
+        const payload = await response.json();
+        if (!cancelled) setPageCount(Math.max(1, payload.page_count || 1));
+      } catch {
+        if (!cancelled) setPageCount(1);
+      }
+    }
+    loadPdfInfo();
+    return () => { cancelled = true; };
+  }, [jobId]);
+
+  useEffect(() => {
+    const target = pageRefs.current[page];
+    if (target) {
+      target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  }, [page, pageCount]);
+
+  const pages = useMemo(
+    () => Array.from({ length: pageCount }, (_, index) => index + 1),
+    [pageCount],
+  );
 
   return (
-    <div className="flex h-full flex-col bg-slate-100">
-      <div className="flex h-12 items-center justify-between border-b border-[var(--border)] bg-white px-4">
+    <div className="flex h-full min-h-0 flex-col bg-slate-100">
+      <div className="flex h-14 items-center justify-between border-b border-[var(--border)] bg-white px-4">
         <div>
-          <p className="text-sm font-semibold">Source Page {page}</p>
-          <p className="text-xs text-[var(--text-muted)]">Evidence highlight is shown when text coordinates are available.</p>
+          <p className="text-sm font-semibold">Full Judgment</p>
+          <p className="text-xs text-[var(--text-muted)]">Showing page {page} of {pageCount}; click evidence to jump and highlight.</p>
         </div>
         {selectedEvidence?.confidence !== undefined && (
           <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-[var(--text-secondary)]">
@@ -40,23 +69,35 @@ function PdfEvidenceViewer({ jobId, selectedEvidence }) {
         )}
       </div>
       <div className="flex-1 overflow-auto p-5">
-        <div className="relative mx-auto w-full max-w-[860px] shadow-sm">
-          <img
-            src={`/api/pdf/${jobId}/page/${page}`}
-            alt={`Judgment page ${page}`}
-            className="block w-full rounded-lg border border-[var(--border)] bg-white"
-          />
-          {hasBox && (
+        <div className="mx-auto grid w-full max-w-[860px] gap-5">
+          {pages.map((pageNumber) => (
             <div
-              className="absolute rounded-sm border-2 border-blue-600 bg-blue-500/20 ring-4 ring-blue-500/10"
-              style={{
-                left: `${bbox[0] * 100}%`,
-                top: `${bbox[1] * 100}%`,
-                width: `${(bbox[2] - bbox[0]) * 100}%`,
-                height: `${Math.max((bbox[3] - bbox[1]) * 100, 1.2)}%`,
-              }}
-            />
-          )}
+              key={pageNumber}
+              ref={(node) => { if (node) pageRefs.current[pageNumber] = node; }}
+              className="pdf-page-shell"
+            >
+              <div className="pdf-page-label">Page {pageNumber}</div>
+              <div className="relative shadow-sm">
+                <img
+                  src={`/api/pdf/${jobId}/page/${pageNumber}`}
+                  alt={`Judgment page ${pageNumber}`}
+                  loading={pageNumber === 1 ? 'eager' : 'lazy'}
+                  className="block w-full rounded-lg border border-[var(--border)] bg-white"
+                />
+                {hasBox && pageNumber === page && (
+                  <div
+                    className="absolute rounded-sm border-2 border-blue-600 bg-blue-500/20 ring-4 ring-blue-500/10"
+                    style={{
+                      left: `${bbox[0] * 100}%`,
+                      top: `${bbox[1] * 100}%`,
+                      width: `${(bbox[2] - bbox[0]) * 100}%`,
+                      height: `${Math.max((bbox[3] - bbox[1]) * 100, 1.2)}%`,
+                    }}
+                  />
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -136,11 +177,27 @@ function ReviewReadiness({ meta }) {
           <p className="mt-1 text-sm text-[var(--text-muted)]">{meta?.case_category || 'General'} matter</p>
         </div>
         <div className="text-right">
-          <p className="text-xs font-semibold uppercase text-[var(--text-muted)]">Time saved</p>
-          <p className="mt-1 text-lg font-bold">{meta?.estimated_minutes_saved || 0} min</p>
-          <p className="mt-1 text-xs text-[var(--text-muted)]">{meta?.pages_reduced || 0} pages skipped</p>
+          <p className="text-xs font-semibold uppercase text-[var(--text-muted)]">Evidence</p>
+          <p className="mt-1 text-lg font-bold">{meta?.source_coverage || 0}%</p>
+          <p className="mt-1 text-xs text-[var(--text-muted)]">{meta?.confidence_label || 'unverified'}</p>
         </div>
       </div>
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <div className="rounded-lg bg-slate-50 p-3">
+          <p className="text-xs font-semibold uppercase text-[var(--text-muted)]">Triage lane</p>
+          <p className="mt-1 text-sm font-bold">{(meta?.triage_lane || 'standard').replaceAll('_', ' ')}</p>
+        </div>
+        <div className="rounded-lg bg-slate-50 p-3">
+          <p className="text-xs font-semibold uppercase text-[var(--text-muted)]">Time saved</p>
+          <p className="mt-1 text-sm font-bold">{meta?.estimated_minutes_saved || 0} min / {meta?.pages_reduced || 0} pages skipped</p>
+        </div>
+      </div>
+      {meta?.impact_summary && (
+        <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-3">
+          <p className="text-xs font-semibold uppercase text-blue-700">Impact brief</p>
+          <p className="mt-1 text-sm leading-relaxed text-slate-700">{meta.impact_summary}</p>
+        </div>
+      )}
       {flags.length > 0 && (
         <div className="mt-4 grid gap-2">
           {flags.map((flag, index) => (
@@ -171,6 +228,44 @@ function changedFields(original, current, prefix) {
     if (before !== after) changes[`${prefix}.${key}`] = { before: original?.[key] ?? '', after: current[key] ?? '' };
   });
   return changes;
+}
+
+function IntelligencePanel({ plan }) {
+  return (
+    <div className="grid gap-4">
+      <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+        <p className="text-xs font-semibold uppercase text-blue-700">Priority summary</p>
+        <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-800">
+          {plan.priority_summary || 'Priority summary will appear after extraction.'}
+        </p>
+      </div>
+      <div className="grid gap-3">
+        <p className="text-xs font-semibold uppercase text-[var(--text-muted)]">Stakeholder handoff</p>
+        {(plan.stakeholders || []).map((item, index) => (
+          <div key={`${item.designation}-${index}`} className="rounded-xl border border-[var(--border)] bg-white p-4">
+            <p className="text-sm font-bold">{item.designation}</p>
+            <p className="mt-2 text-sm text-[var(--text-secondary)]">{item.responsibility}</p>
+            <p className="mt-2 text-xs text-[var(--text-muted)]">{item.handoff}</p>
+          </div>
+        ))}
+      </div>
+      <div className="grid gap-2">
+        <p className="text-xs font-semibold uppercase text-[var(--text-muted)]">Handoff checklist</p>
+        {(plan.handoff_checklist || []).map((item, index) => (
+          <div key={`${item.title}-${index}`} className="grid grid-cols-[1fr_130px] gap-3 rounded-lg bg-slate-50 p-3 text-sm">
+            <div>
+              <p className="font-semibold">{item.title}</p>
+              <p className="mt-1 text-xs text-[var(--text-muted)]">{item.owner}</p>
+            </div>
+            <div className="text-right">
+              <p className="font-semibold">{item.due}</p>
+              <p className="mt-1 text-xs capitalize text-[var(--text-muted)]">{item.status}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function ReviewPage({ result, onBack, onApproved }) {
@@ -276,7 +371,7 @@ export default function ReviewPage({ result, onBack, onApproved }) {
       <main className="grid min-h-0 flex-1 grid-cols-[minmax(420px,52%)_minmax(420px,48%)] overflow-hidden">
         <PdfEvidenceViewer jobId={job_id} selectedEvidence={selectedEvidence} />
 
-        <section className="flex min-w-0 flex-col border-l border-[var(--border)] bg-white">
+        <section className="flex min-h-0 min-w-0 flex-col border-l border-[var(--border)] bg-white">
           <div className="flex shrink-0 border-b border-[var(--border)] px-4">
             {tabs.map((tab) => (
               <button
@@ -351,9 +446,13 @@ export default function ReviewPage({ result, onBack, onApproved }) {
                     <p className="mt-1 text-xs text-[var(--text-muted)]">{plan.deadline_basis || 'No deadline basis recorded.'}</p>
                   </div>
                   <TextInput label="Responsible Office" value={plan.assigned_designation} onChange={(v) => updatePlan('assigned_designation', v)} evidence={evidence.action_plan} onSelectEvidence={setSelectedEvidence} />
+                  <TextInput label="Service Level" value={(plan.service_level || '').replaceAll('_', ' ')} onChange={(v) => updatePlan('service_level', v.replaceAll(' ', '_'))} />
+                  <TextArea label="Escalation Note" value={plan.escalation_note} onChange={(v) => updatePlan('escalation_note', v)} rows={3} />
                   <TextArea label="Reasoning" value={plan.reasoning} onChange={(v) => updatePlan('reasoning', v)} rows={5} evidence={evidence.action_plan} onSelectEvidence={setSelectedEvidence} />
+                  <TextArea label="First 48 Hours" value={toLines(plan.first_48_hours || [])} onChange={(v) => updatePlan('first_48_hours', fromLines(v))} rows={5} />
                   <TextArea label="Deadline Override Reason" value={plan.deadline_override_reason} onChange={(v) => updatePlan('deadline_override_reason', v)} rows={3} />
                 </div>
+                <IntelligencePanel plan={plan} />
               </div>
             )}
 
@@ -402,7 +501,7 @@ export default function ReviewPage({ result, onBack, onApproved }) {
               <button onClick={onBack} className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm font-semibold text-[var(--text-secondary)] transition hover:bg-slate-100">
                 Reject
               </button>
-              <button onClick={handleApprove} disabled={approving} className="rounded-lg bg-[var(--success)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50">
+              <button onClick={handleApprove} disabled={approving} className="rounded-lg bg-[var(--green)] px-5 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50">
                 {approving ? 'Approving...' : `Approve (${Object.keys(edits).length} edits)`}
               </button>
             </div>

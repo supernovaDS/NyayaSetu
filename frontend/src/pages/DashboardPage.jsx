@@ -39,6 +39,16 @@ function Badge({ level }) {
   return <span className={`badge ${level || 'low'}`}>{level || 'unknown'}</span>;
 }
 
+function StatTile({ label, value, detail, tone = 'neutral' }) {
+  return (
+    <div className={`stat-tile ${tone}`}>
+      <p className="stat-label">{label}</p>
+      <p className="stat-value">{value}</p>
+      <p className="stat-detail">{detail}</p>
+    </div>
+  );
+}
+
 function AuditTrail({ jobId }) {
   const [events, setEvents] = useState(null);
   const [open, setOpen] = useState(false);
@@ -114,10 +124,12 @@ function CaseCard({ c, onMove }) {
       <p className="case-meta" style={{ marginTop: 12 }}>
         <strong style={{ color: 'var(--ink)' }}>Category:</strong> {meta.case_category || 'General'}
       </p>
+      {plan.priority_summary && <p className="case-priority">{plan.priority_summary}</p>}
       <p className="case-meta" style={{ marginTop: 12 }}>
         <strong style={{ color: 'var(--ink)' }}>Office:</strong> {plan.assigned_designation || 'Not assigned'}
       </p>
       <p className="case-meta">Deadline: {plan.calculated_deadline || 'Manual review required'} {plan.days_remaining >= 0 ? `(${plan.days_remaining} days left)` : ''}</p>
+      <p className="case-meta">Lane: {(meta.triage_lane || plan.service_level || 'standard').replaceAll('_', ' ')} | Evidence {meta.source_coverage ?? 0}%</p>
       {(meta.flags || []).slice(0, 2).map((flag, index) => (
         <p key={`${flag.title}-${index}`} className="case-meta" style={{ color: flag.severity === 'critical' ? 'var(--red)' : 'var(--amber)' }}>
           {flag.severity}: {flag.title}
@@ -204,6 +216,21 @@ export default function DashboardPage({ onUpload, onAdmin }) {
   const averageReadiness = cases.length
     ? Math.round(cases.reduce((sum, c) => sum + (c.review_meta?.readiness_score || 0), 0) / cases.length)
     : 0;
+  const averageCoverage = cases.length
+    ? Math.round(cases.reduce((sum, c) => sum + (c.review_meta?.source_coverage || 0), 0) / cases.length)
+    : 0;
+  const departmentStats = useMemo(() => {
+    const counts = new Map();
+    cases.forEach((c) => {
+      const office = c.action_plan?.assigned_designation || 'Unassigned';
+      counts.set(office, (counts.get(office) || 0) + 1);
+    });
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
+  }, [cases]);
+  const nextDeadlines = useMemo(() => cases
+    .filter((c) => Number.isFinite(c.action_plan?.days_remaining) && c.action_plan.days_remaining >= 0)
+    .sort((a, b) => a.action_plan.days_remaining - b.action_plan.days_remaining)
+    .slice(0, 3), [cases]);
 
   return (
     <div className="app-page">
@@ -215,7 +242,7 @@ export default function DashboardPage({ onUpload, onAdmin }) {
             <p className="panel-copy">
               {urgentCount} urgent, {criticalCount} critical, {needsReviewCount} need review, {missingDeadlineCount} missing deadline
             </p>
-            <p className="panel-copy">Average readiness {averageReadiness}/100 · Estimated review time saved {minutesSaved} minutes</p>
+            <p className="panel-copy">Average readiness {averageReadiness}/100 | Estimated review time saved {minutesSaved} minutes</p>
           </div>
           <div className="filter-row">
             {RISK_FILTERS.map((filter) => (
@@ -227,6 +254,51 @@ export default function DashboardPage({ onUpload, onAdmin }) {
                 {filter.label}
               </button>
             ))}
+          </div>
+        </section>
+
+        <section className="command-grid">
+          <StatTile label="Verified cases" value={cases.length} detail="Only human-approved records enter this dashboard" />
+          <StatTile label="Urgent queue" value={urgentCount} detail="Deadline due in 7 days or less" tone={urgentCount ? 'danger' : 'neutral'} />
+          <StatTile label="Source coverage" value={`${averageCoverage}%`} detail="Evidence-backed review confidence" />
+          <StatTile label="Time recovered" value={`${minutesSaved}m`} detail="Estimated manual reading avoided" tone="success" />
+        </section>
+
+        <section className="insight-grid">
+          <div className="panel insight-panel">
+            <div className="insight-header">
+              <h2 className="panel-title">Next Deadlines</h2>
+              <span className="count-pill">{nextDeadlines.length}</span>
+            </div>
+            <div className="insight-list">
+              {nextDeadlines.length === 0 ? (
+                <p className="case-meta">No verified deadlines yet.</p>
+              ) : nextDeadlines.map((item) => (
+                <div key={item.job_id} className="insight-row">
+                  <div>
+                    <p className="metric-value">{item.extracted_data?.case_title || 'Untitled case'}</p>
+                    <p className="metric-label">{item.action_plan?.assigned_designation || 'Not assigned'}</p>
+                  </div>
+                  <Badge level={item.action_plan?.contempt_risk_level} />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="panel insight-panel">
+            <div className="insight-header">
+              <h2 className="panel-title">Department Load</h2>
+              <span className="count-pill">{departmentStats.length}</span>
+            </div>
+            <div className="insight-list">
+              {departmentStats.length === 0 ? (
+                <p className="case-meta">No department assignments yet.</p>
+              ) : departmentStats.map(([office, count]) => (
+                <div key={office} className="insight-row">
+                  <p className="metric-value">{office}</p>
+                  <span className="count-pill">{count}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 
